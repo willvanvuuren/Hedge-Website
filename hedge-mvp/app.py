@@ -1,27 +1,30 @@
 from flask import Flask, request, redirect, session, render_template
 from flask_sqlalchemy import SQLAlchemy
-from functools import wraps
-
 from PyPDF2 import PdfReader
 import requests
+from functools import wraps
 
+# Initialize Flask app and database
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hedge.db'
-app.config['SECRET_KEY'] = 'your-secret-key'  # For session management
+app.config['SECRET_KEY'] = 'hedge'
 db = SQLAlchemy(app)
 
+# Define the Document model
 class Document(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     time_created = db.Column(db.DateTime, default=db.func.current_timestamp())
     document_type = db.Column(db.String(50))
     source_name = db.Column(db.String(100))
     document_title = db.Column(db.String(200))
-    document_content = db.Column(db.Text)  # Original PDF text
-    ai_content = db.Column(db.Text)  # AI-generated content
+    document_content = db.Column(db.Text)
+    ai_content = db.Column(db.Text)
 
+# Create the database tables
 with app.app_context():
     db.create_all()
 
+# Login decorator
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -30,6 +33,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Login routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -43,12 +47,10 @@ def login():
         return redirect('/dashboard')
     return 'Invalid credentials'
 
+# Upload route
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
-    document_type = request.form['document_type']
-    source_name = request.form['source_name']
-    document_title = request.form['document_title']
     pdf_file = request.files['document']
 
     # Extract text from PDF
@@ -57,25 +59,46 @@ def upload():
     for page in reader.pages:
         document_content += page.extract_text() or ""
 
-    # Analyze with xAI API
-    api_key = "xai-zTJHU64V5QFQlccXcJt4CKfEHPwQ7mKiPUGCsQxK6fUabOWp1KaEvDTn5bnDeK7X1oe5wqVXImYCZArc"
+    # Generate metadata with xAI API
+    api_key = "your-xai-api-key-here"  # Replace with your actual API key
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}"
     }
+    metadata_prompt = "Based on the following document, provide a document type, source name, and title in the format: 'Type: [type]\nSource: [source]\nTitle: [title]'"
     data = {
         "messages": [
-            {"role": "system", "content": "Extract market-moving or primary source information and provide relevant context."},
+            {"role": "system", "content": metadata_prompt},
             {"role": "user", "content": document_content}
         ],
         "model": "grok-2-latest",
-        "stream": false,
+        "stream": False,
+        "temperature": 0
+    }
+    response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data)
+    metadata_response = response.json()['choices'][0]['message']['content']
+
+    # Parse metadata
+    lines = metadata_response.split('\n')
+    document_type = lines[0].split(': ')[1]
+    source_name = lines[1].split(': ')[1]
+    document_title = lines[2].split(': ')[1]
+
+    # Analyze content with xAI API (optional AI analysis)
+    analysis_prompt = "Extract market-moving or primary source information and provide relevant context."
+    data = {
+        "messages": [
+            {"role": "system", "content": analysis_prompt},
+            {"role": "user", "content": document_content}
+        ],
+        "model": "grok-2-latest",
+        "stream": False,
         "temperature": 0
     }
     response = requests.post("https://api.x.ai/v1/chat/completions", headers=headers, json=data)
     ai_content = response.json()['choices'][0]['message']['content']
 
-    # Save to database
+    # Save to database (assuming a Document model exists)
     new_doc = Document(
         document_type=document_type,
         source_name=source_name,
@@ -88,12 +111,14 @@ def upload():
 
     return redirect('/dashboard')
 
+# Dashboard route
 @app.route('/dashboard')
 @login_required
 def dashboard():
     documents = Document.query.all()
     return render_template('dashboard.html', documents=documents)
 
+# Routes to view content (THIS GOES HERE)
 @app.route('/view_original/<int:id>')
 @login_required
 def view_original(id):
@@ -106,3 +131,6 @@ def view_ai(id):
     doc = Document.query.get_or_404(id)
     return doc.ai_content
 
+# Run the app (only if this is the main module)
+if __name__ == '__main__':
+    app.run(debug=True)
