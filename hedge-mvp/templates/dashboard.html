@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Hedge</title>
+</head>
+<body>
+    <h1>Upload Document</h1>
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <label>Document Type: <input type="text" name="document_type"></label><br>
+        <label>Source Name: <input type="text" name="source_name"></label><br>
+        <label>Document Title: <input type="text" name="document_title"></label><br>
+        <label>Document (PDF): <input type="file" name="document" accept=".pdf"></label><br>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h1>Documents</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Time Created</th>
+                <th>Document Type</th>
+                <th>Source Name</th>
+                <th>Document Title</th>
+                <th>AI Document</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td>{{ doc.time_created }}</td>
+                <td>{{ doc.document_type }}</td>
+                <td>{{ doc.source_name }}</td>
+                <td><a href="/view_original/{{ doc.id }}">{{ doc.document_title }}</a></td>
+                <td><a href="/view_ai/{{ doc.id }}">View AI Analysis</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
